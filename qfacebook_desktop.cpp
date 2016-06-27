@@ -76,7 +76,13 @@ void QFacebook::requestMe() {
 
 void QFacebook::requestPublishPermissions() {
 	// Directly calling slot
-	onFacebookStateChanged(SessionOpenTokenExtended, QStringList());
+    onFacebookStateChanged(SessionOpenTokenExtended, QStringList());
+}
+
+void QFacebook::publishPhoto(QString photoUrl, QString message)
+{
+    Q_UNUSED(message)
+    qDebug() << "Publish Photo" << photoUrl << message;
 }
 
 void QFacebook::publishPhoto( QPixmap photo, QString message ) {
@@ -89,6 +95,8 @@ void QFacebook::publishPhotosViaShareDialog(QVariantList photos)
     qDebug() << "Publish Photos" << photos.size();
 }
 
+void QFacebook::publishPhotoViaShareDialog(QString photo_url, QString caption){}
+
 void QFacebook::publishLinkViaShareDialog( QString linkName, QString link, QString imageUrl, QString caption, QString description ) {
 	qDebug() << "Publish link" << link << linkName << imageUrl;
 }
@@ -99,6 +107,8 @@ void QFacebook::requestMyFriends() {
     dataMap["friends"] = QStringList();
     emit operationDone( "requestMyFriends", dataMap );
 }
+
+void QFacebook::inviteFriends(QString appId,QString imgUrl){}
 
 void QFacebook::setAppID( QString appID ) {
 	Q_UNUSED(appID)
@@ -128,7 +138,7 @@ QString QFacebook::getAccessToken() {
 }
 
 QString QFacebook::getExpirationDate() {
-	return QString();
+    return QString();
 }
 
 void QFacebook::onApplicationStateChanged(Qt::ApplicationState state) {

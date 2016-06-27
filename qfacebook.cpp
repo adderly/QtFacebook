@@ -39,6 +39,15 @@ QFacebook::QFacebook(QObject *parent )
 	initPlatformData();
 	connect( qApp, SIGNAL(applicationStateChanged(Qt::ApplicationState)),
 			 this, SLOT(onApplicationStateChanged(Qt::ApplicationState)) );
+    connect(this,&QFacebook::onLogin,[&](bool isLogin ,const std::string& msg){
+        qDebug() << "onLogin " << isLogin << msg.c_str();
+        this->connected = isLogin;
+         emit connectedChanged( isLogin );
+    });
+        connect(this,&QFacebook::onPermission,[&](bool isLogin ,const std::string& msg){
+                qDebug() << "onPermission " << isLogin << msg.c_str();
+                this->setHasWritePermission(isLogin);
+        });
 }
 
 QFacebook::~QFacebook() {
@@ -55,6 +64,15 @@ QString QFacebook::getDisplayName() {
 
 bool QFacebook::getConnected() {
 	return connected;
+}
+
+bool QFacebook::hasWritePermission(){
+    return m_hasWritePermission;
+}
+
+void QFacebook::setHasWritePermission(bool val){
+    m_hasWritePermission = val;
+    emit hasWritePermissionChanged(m_hasWritePermission);
 }
 
 QStringList QFacebook::getRequestPermissions() {
@@ -87,6 +105,11 @@ bool QFacebook::isReadPermission( QString permission ) {
 		<< "email"
 		<< "user_photos";
 	return knowRead.contains( permission );
+}
+
+bool QFacebook::isPermissionGranted(QString permission)
+{
+    return grantedPermissions.contains(permission);
 }
 
 void QFacebook::publishQuickItemGrabResult(QQuickItemGrabResult *result, QString message)

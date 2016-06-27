@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License      *
  * along with this program. If not, see <http://www.gnu.org/licenses/>.   *
  * ********************************************************************** */
+#ifndef QFACEBOOK_SDK_4
 
 #include "qfacebook.h"
 #import "FacebookSDK/FacebookSDK.h"
@@ -25,6 +26,7 @@
 #include <QByteArray>
 #include <QBuffer>
 
+#ifndef QFACEBOOK_NOT_DEFINE_IOS_URL_HANDLER
 /*! Override the application:openURL UIApplicationDelegate adding
  *  a category to the QIOApplicationDelegate.
  *  The only way to do that even if it's a bit like hacking the Qt stuff
@@ -41,9 +43,12 @@
 #pragma unused(application)
 #pragma unused(sourceApplication)
 #pragma unused(annotation)
+    NSLog(@"error:%@",@"Facebook handled url");
 	return [[FBSession activeSession] handleOpenURL:url];
 }
 @end
+#endif
+
 
 class QFacebookPlatformData {
 public:
@@ -108,6 +113,7 @@ void QFacebook::login() {
 	[fbSession setStateChangeHandler:^(FBSession* session, FBSessionState state, NSError* error) {
 		data->sessionStateHandler(session, state, error);
 	}];
+    [FBSession.activeSession close];
 	[FBSession setActiveSession:fbSession];
 	// for forcing the in-app login using webview: FBSessionLoginBehaviorForcingWebView
 	// default FBSessionLoginBehaviorWithFallbackToWebView
@@ -153,8 +159,18 @@ void QFacebook::requestPublishPermissions() {
 	}];
 }
 
+void QFacebook::publishPhoto(QString photoUrl, QString message) {
+    QImage img(photoUrl);
+    QPixmap p = QPixmap::fromImage(img);
+    publishPhoto(p,message);
+}
+
 void QFacebook::publishPhoto( QPixmap photo, QString message ) {
-	//qDebug() << "Publish Photo" << photo.size() << message;
+    qDebug() << "Publish Photo" << photo.size() << message;
+    if(photo.isNull()) {
+        qDebug() << "Ïmage to upload is null";
+        return;
+    }
 
 	QByteArray imgData;
 	QBuffer buffer(&imgData);
@@ -183,6 +199,11 @@ void QFacebook::publishPhoto( QPixmap photo, QString message ) {
 void QFacebook::publishPhotosViaShareDialog(QVariantList photos)
 {
     qDebug() << "Publish Photos" << photos.size();
+}
+
+void QFacebook::publishPhotoViaShareDialog(QString photo_url, QString caption) {
+
+
 }
 
 void QFacebook::publishLinkViaShareDialog( QString linkName, QString link, QString imageUrl, QString caption, QString description ) {
@@ -239,6 +260,8 @@ void QFacebook::requestMyFriends() {
 		}
 	}];
 }
+
+void QFacebook::inviteFriends(QString appId,QString imgUrl){}
 
 void QFacebook::setAppID( QString appID ) {
 	if ( this->appID != appID ) {
@@ -302,3 +325,5 @@ void QFacebook::onApplicationStateChanged(Qt::ApplicationState state) {
 		[[FBSession activeSession] handleDidBecomeActive];
 	}
 }
+
+#endif

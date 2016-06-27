@@ -48,9 +48,10 @@ static jobjectArray createPixmapList( QAndroidJniEnvironment &env, const QVarian
         buffer.open( QIODevice::WriteOnly );
 
         const QVariant &var = photos.at( i );
+        QPixmap pix = var.value<QPixmap>();
 
-        if (var.canConvert<QPixmap>()) {
-            var.value<QPixmap>().save( &buffer, "PNG" );
+        if (!pix.isNull()) {
+            pix.save( &buffer, "PNG" );
         } else if (var.canConvert<QQuickItemGrabResult*>()) {
             QQuickItemGrabResult *grabResult = var.value<QQuickItemGrabResult*>();
             QPixmap::fromImage( grabResult->image() ).save( &buffer, "PNG" );
@@ -180,6 +181,12 @@ void QFacebook::requestPublishPermissions() {
 	}
 }
 
+void QFacebook::publishPhoto(QString photoUrl, QString message){
+    QImage img(photoUrl);
+    QPixmap p = QPixmap::fromImage(img);
+    publishPhoto(p,message);
+}
+
 void QFacebook::publishPhoto( QPixmap photo, QString message ) {
 	//qDebug() << "Publish Photo" << photo.size() << message;
 
@@ -239,6 +246,38 @@ void QFacebook::publishPhotosViaShareDialog( QVariantList photos )
     }
 }
 
+void QFacebook::publishPhotoViaShareDialog( QString photo_url ,QString caption)
+{
+    // create the java byte array
+    QAndroidJniEnvironment env;
+    // call the java implementation
+    QAndroidJniObject::callStaticMethod<void>(
+        data->jClassName.toLatin1().data(), "publishPhotoViaShareDialog", "(Ljava/lang/String;Ljava/lang/String;)V",
+        QAndroidJniObject::fromString(photo_url).object<jstring>(),
+        QAndroidJniObject::fromString(caption).object<jstring>() );
+
+//    QAndroidJniEnvironment env;
+//    jobjectArray photosArray = nullptr;
+//    jstring jcaption = QAndroidJniObject::fromString(caption).object<jstring>();
+
+
+
+
+//    // call the java implementation
+//    QAndroidJniObject::callStaticMethod<void>(data->jClassName.toLatin1().data(),
+//                                              "publishPhotoViaShareDialog", "([B;Ljava/lang/String;)V",
+//                                              photosArray ,jcaption);
+
+    // Checking exceptions
+    if (env->ExceptionCheck()) {
+        // Printing exception message
+        env->ExceptionDescribe();
+
+        // Clearing exceptions
+        env->ExceptionClear();
+    }
+}
+
 void QFacebook::publishLinkViaShareDialog( QString linkName, QString link, QString imageUrl, QString caption, QString description ) {
 	qDebug() << "Publish link" << link << linkName << imageUrl << caption << description;
 
@@ -278,6 +317,8 @@ void QFacebook::requestMyFriends() {
 	}
 }
 
+void QFacebook::inviteFriends(QString appId,QString imgUrl){}
+
 void QFacebook::setAppID( QString ) {
 
 }
@@ -302,15 +343,15 @@ void QFacebook::setRequestPermissions( QStringList requestPermissions ) {
 				QAndroidJniObject::fromString(permission).object<jstring>());
 		}
 
-		// Checking exceptions
-		QAndroidJniEnvironment env;
-		if (env->ExceptionCheck()) {
-			// Printing exception message
-			env->ExceptionDescribe();
+        // Checking exceptions
+        QAndroidJniEnvironment env;
+        if (env->ExceptionCheck()) {
+            // Printing exception message
+            env->ExceptionDescribe();
 
-			// Clearing exceptions
-			env->ExceptionClear();
-		}
+            // Clearing exceptions
+            env->ExceptionClear();
+        }
 	}
 	emit requestPermissionsChanged( this->requestPermissions );
 }
@@ -348,15 +389,15 @@ QString QFacebook::getAccessToken() {
 	QAndroidJniObject token = QAndroidJniObject::callStaticObjectMethod<jstring>(
 		data->jClassName.toLatin1().data(), "getAccessToken" );
 
-	// Checking exceptions
-	QAndroidJniEnvironment env;
-	if (env->ExceptionCheck()) {
-		// Printing exception message
-		env->ExceptionDescribe();
+    // Checking exceptions
+    QAndroidJniEnvironment env;
+    if (env->ExceptionCheck()) {
+        // Printing exception message
+        env->ExceptionDescribe();
 
-		// Clearing exceptions
-		env->ExceptionClear();
-	}
+        // Clearing exceptions
+        env->ExceptionClear();
+    }
 
 	return token.toString();
 }
@@ -366,15 +407,15 @@ QString QFacebook::getExpirationDate() {
 	QAndroidJniObject expire = QAndroidJniObject::callStaticObjectMethod<jstring>(
 		data->jClassName.toLatin1().data(), "getExpirationDate" );
 
-	// Checking exceptions
-	QAndroidJniEnvironment env;
-	if (env->ExceptionCheck()) {
-		// Printing exception message
-		env->ExceptionDescribe();
+    // Checking exceptions
+    QAndroidJniEnvironment env;
+    if (env->ExceptionCheck()) {
+        // Printing exception message
+        env->ExceptionDescribe();
 
-		// Clearing exceptions
-		env->ExceptionClear();
-	}
+        // Clearing exceptions
+        env->ExceptionClear();
+    }
 
 	return expire.toString();
 }
@@ -406,7 +447,7 @@ static void fromJavaOnFacebookStateChanged(JNIEnv *env, jobject thiz, jint newst
 }
 
 static void fromJavaOnOperationDone(JNIEnv* env, jobject thiz, jstring operation, jobjectArray data ) {
-	Q_UNUSED(env)
+    Q_UNUSED(env)
 	Q_UNUSED(thiz)
 	if ( QFacebookPlatformData::initialized ) {
 		QString operationQ = QAndroidJniObject(operation).toString();
@@ -426,9 +467,7 @@ static void fromJavaOnOperationDone(JNIEnv* env, jobject thiz, jstring operation
 				dataMap[qkey] = value.toString();
 			}
 		}
-		QMetaObject::invokeMethod(QFacebook::instance(), "operationDone", Qt::QueuedConnection,
-			Q_ARG(QString, operationQ),
-			Q_ARG(QVariantMap, dataMap) );
+        emit QFacebook::instance()->operationDone(operationQ,dataMap);
 	}
 }
 
@@ -438,13 +477,11 @@ static void fromJavaOnOperationError(JNIEnv* env, jobject thiz, jstring operatio
 	if ( QFacebookPlatformData::initialized ) {
 		QString operationQ = QAndroidJniObject(operation).toString();
 		QString errorQ = QAndroidJniObject(error).toString();
-		QMetaObject::invokeMethod(QFacebook::instance(), "operationError", Qt::QueuedConnection,
-			Q_ARG(QString, operationQ),
-			Q_ARG(QString, errorQ) );
-	}
+        emit QFacebook::instance()->operationError(operationQ,errorQ);
+    }
 }
 
-static JNINativeMethod methods[] {
+static const JNINativeMethod methods[] {
 	{"onFacebookStateChanged", "(I[Ljava/lang/String;)V", (void*)(fromJavaOnFacebookStateChanged)},
 	{"operationDone", "(Ljava/lang/String;[Ljava/lang/String;)V", (void*)(fromJavaOnOperationDone)},
 	{"operationError", "(Ljava/lang/String;Ljava/lang/String;)V", (void*)(fromJavaOnOperationError)}
@@ -456,13 +493,16 @@ int qFacebook_registerJavaNativeMethods(JavaVM* vm, void*) {
 extern "C"
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *) {
 #endif
+    qDebug() << "JNI FACEBOOK REGISTER INIT";
 	JNIEnv *env;
-	if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_4) != JNI_OK) {
+    if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
 		return JNI_FALSE;
 	}
 	jclass clazz = env->FindClass("org/gmaxera/qtfacebook/QFacebookBinding");
 	if (env->RegisterNatives(clazz, methods, sizeof(methods) / sizeof(methods[0])) < 0) {
+        qDebug() << "JNI: failed to register methods for facebook";
 		return JNI_FALSE;
 	}
-	return JNI_VERSION_1_4;
+    qDebug() << "JNI FACEBOOK REGISTER OK";
+    return JNI_VERSION_1_6;
 }

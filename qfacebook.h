@@ -24,6 +24,16 @@
 #include <QUrl>
 #include <QPixmap>
 
+#ifdef QFACEBOOK_SDK_4
+#include "PluginFacebook/PluginFacebook.h"
+#else
+namespace sdkbox {
+    class FacebookListener{};
+    class FBInvitableFriendsInfo{};
+    class FBGraphUser{};
+}
+#endif
+
 class QFacebookPlatformData;
 class QQuickItemGrabResult;
 
@@ -38,15 +48,16 @@ int qFacebook_registerJavaNativeMethods(JavaVM*, void*);
  *
  *  The supported platform for now are: Android and iOS
  */
-class QFacebook : public QObject {
+class QFacebook : public QObject,public sdkbox::FacebookListener {
 	Q_OBJECT
 	Q_ENUMS( FacebookState )
 	/*! Facebook application ID */
 	Q_PROPERTY( QString appID READ getAppID WRITE setAppID NOTIFY appIDChanged )
 	/*! Facebook application display name (used only on iOS platform) */
 	Q_PROPERTY( QString displayName READ getDisplayName WRITE setDisplayName NOTIFY displayNameChanged )
-	/*! True if the login into Facebook has been done and the session is active, False otherwise */
-	Q_PROPERTY( bool connected READ getConnected NOTIFY connectedChanged )
+    /*! True if the login into Facebook has been done and the session is active, False otherwise */
+    Q_PROPERTY( bool connected READ getConnected NOTIFY connectedChanged )
+    Q_PROPERTY( bool hasWritePermission READ hasWritePermission NOTIFY hasWritePermissionChanged)
 	/*! Facebook Session Current State (detailed state as returned by Facebook SDK) */
 	Q_PROPERTY( FacebookState state READ getState NOTIFY stateChanged )
 	/*! The list of all requested permissions; use this to configure the permission needed
@@ -115,7 +126,12 @@ public slots:
 	 *  \param photo the image will be uploaded to the user album on Facebook
 	 *  \param message an optional description of the photo that will be shown in the feed story
 	 */
-	void publishPhoto( QPixmap photo, QString message=QString() );
+    void publishPhoto( QString photoUrl, QString message=QString() );
+    /*! post a photo to the user wall
+     *  \param photo the image will be uploaded to the user album on Facebook
+     *  \param message an optional description of the photo that will be shown in the feed story
+     */
+    void publishPhoto( QPixmap photo, QString message=QString() );
     /*! post a photo to the user wall
      *  \param result the QQuickItem::grabToImage() result will be uploaded to the user album on Facebook
      *  \param message an optional description of the photo that will be shown in the feed story
@@ -131,6 +147,15 @@ public slots:
      *  \param photos photos to publish, supported types: QPixmap and QQuickItemGrabResult
      */
     void publishPhotosViaShareDialog( QVariantList photos );
+    /*! Publish a photo using Photo Share Dialog.
+     *
+     *  If the Photo Share Dialog is not available
+     *  (e.g. because the user hasn't the Facebook app installed), then do nothing
+     *  (TODO: Fix it, try to using Feed Dialog).
+     *  This function does not require the user to be logged into Facebook from the app.
+     *  \param photos photos to publish, supported types: QPixmap and QQuickItemGrabResult
+     */
+    void publishPhotoViaShareDialog(QString photo_url , QString caption);
 
 	/*! Publish a link with a photo using Share Dialog.
 	 *
@@ -149,7 +174,10 @@ public slots:
 	 *  the key "friends" there will be a QStringList containing the facebookId of friends
 	 */
 	void requestMyFriends();
-
+    /*!
+     *
+     */
+    void inviteFriends(QString appId,QString imgUrl);
 	/*! return the application ID */
 	QString getAppID();
 	/*! configure the application ID (it is a global settings for all future sessions) */
@@ -161,6 +189,8 @@ public slots:
 	void setDisplayName( QString displayName );
 	/*! True if connected to Facebook and session is active; false otherwise */
 	bool getConnected();
+    bool hasWritePermission();
+    void setHasWritePermission(bool val);
 	/*! return the current state of Facebook session */
 	FacebookState getState();
 	/*! return the list of requested permissions */
@@ -177,13 +207,31 @@ public slots:
 	 *  The data is returned as a string formatted into ISO format yyyy-MM-ddTHH:mm:ss.SSSZ
 	 */
 	QString getExpirationDate();
+    /*!
+    *  return whether the permission are set in the granted list.
+    */
+    bool isPermissionGranted(QString permission);
 signals:
 	void appIDChanged( QString appID );
 	void displayNameChanged( QString displayName );
 	void connectedChanged( bool connected );
+    void hasWritePermissionChanged(bool hasWritePermission);
 	void stateChanged( FacebookState state );
 	void requestPermissionsChanged( QStringList requestPermissions );
 	void grantedPermissionsChanged( QStringList grantedPermissions );
+    //sdkbox
+    void onLogin(bool isLogin, const std::string& msg);
+    void onSharedSuccess(const std::string& message);
+    void onSharedFailed(const std::string& message);
+    void onSharedCancel();
+    void onAPI(const std::string& key, const std::string& jsonData);
+    void onPermission(bool isLogin, const std::string& msg);
+    void onFetchFriends(bool ok, const std::string& msg);
+    void onRequestInvitableFriends( const sdkbox::FBInvitableFriendsInfo& friends);
+    void onInviteFriendsWithInviteIdsResult( bool result, const std::string& msg );
+    void onInviteFriendsResult( bool result, const std::string& msg );
+    void onGetUserInfo( const sdkbox::FBGraphUser& userInfo );
+    //sdkbox!
 	/*! emitted when an operation is completed
 	 *  \param operation the name of the method called (i.e. publishPhoto)
 	 *  \param data eventually data returned by the operation completed
@@ -202,6 +250,8 @@ private slots:
 	void onApplicationStateChanged(Qt::ApplicationState state);
 	//! handle the changing of the underlying Facebook session state
 	void onFacebookStateChanged( int newstate, QStringList grantedPermissions );
+
+    
 private:
 	/*! singleton object */
 	QFacebook( QObject* parent=0 );
@@ -216,6 +266,7 @@ private:
 	QString appID;
 	QString displayName;
 	bool connected;
+    bool m_hasWritePermission;
 	FacebookState state;
 	QStringList requestPermissions;
 	QStringList grantedPermissions;
